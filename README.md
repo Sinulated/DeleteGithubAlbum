@@ -3,7 +3,7 @@ Automate Deleting Github Albums
 
 Since there seems to be no decent way to manage albums on Deviantart (at least when you have reached 40k uploads and everything breaks)
 
-I created this stupid webdriver script to automate the tedious process.
+I created this stupid webdriver script to automate the tedious process. (bring your own chromedriver.exe) 
 
 On first launch, you will need to log in manually and press enter in the console to save the cookie.
 
