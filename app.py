@@ -3,9 +3,12 @@ import time
 import os
 from selenium import webdriver
 from selenium.webdriver.chrome.service import Service
-from selenium.webdriver.common.by import By
+from selenium.webdriver.common.action_chains import ActionChains
+from selenium.webdriver.common.keys import Keys
 from selenium.webdriver.support.ui import WebDriverWait
 from selenium.webdriver.support import expected_conditions as EC
+from selenium.webdriver.common.by import By
+import time
 
 # Set up Chrome WebDriver
 chrome_driver_path = "chromedriver.exe"  # Ensure this is in the same folder
@@ -119,7 +122,7 @@ print("✅ Process complete.")
 
 
 # ✅ Function to find the correct delete button
-def find_correct_delete_button():
+def find_correct_delete_button(driver):
     try:
         # ✅ Find all buttons on the page
         all_buttons = driver.find_elements(By.TAG_NAME, "button")
@@ -128,7 +131,7 @@ def find_correct_delete_button():
             # ✅ Check if the button contains the delete icon (SVG trash bin)
             try:
                 svg = btn.find_element(By.TAG_NAME, "svg")
-                svg_path = svg.get_attribute("outerHTML")  # Get full SVG markup
+                svg_path = svg.get_attribute("outerHTML")
                 if "M14 3a1 1 0 011 1v1h5a1 1 0 010 2h-1v11.586a1 1 0 01-.293.707l-1.414 1.414a1 1 0 01-.707.293H7.414a1 1 0 01-.707-.293l-1.414-1.414A1 1 0 015 18.586V7H4a1 1 0 110-2h5V4a1 1 0 011-1h4z" in svg_path:
                     print(f"✅ Found delete button")
                     return btn  # ✅ Return the correct button
@@ -143,18 +146,42 @@ def find_correct_delete_button():
         return None
 
 
+
 # ✅ Function to find and click the confirm delete button using CSS Selector
 def confirm_deletion():
     try:
-        confirm_button = WebDriverWait(driver, 5).until(
-            EC.element_to_be_clickable((By.CSS_SELECTOR, "button._1oLUC"))
+        print("🛑 Waiting for delete confirmation modal...")
+
+        # ✅ Wait for the modal (NO FIXED DELAYS)
+        WebDriverWait(driver, 2).until(
+            EC.presence_of_element_located((By.CLASS_NAME, "ReactModal__Overlay"))
         )
-        confirm_button.click()
-        print("✅ Confirm delete clicked.")
-        return True
-    except:
+
+        # ✅ Find all buttons and locate the one with "Delete" text
+        all_buttons = driver.find_elements(By.TAG_NAME, "button")
+        confirm_button = None
+
+        for btn in all_buttons:
+            if "Delete" in btn.text.strip():
+                confirm_button = btn
+                break
+
+        # ✅ Click the confirm delete button as soon as possible
+        if confirm_button:
+            print("✅ Confirm delete button found. Clicking...")
+            driver.execute_script("arguments[0].scrollIntoView();", confirm_button)  # Ensure visibility
+            confirm_button.click()
+            return True
+
         print("❌ Confirm delete button not found.")
         return False
+
+    except Exception as e:
+        print(f"❌ Error clicking confirm delete button: {e}")
+        return False
+
+
+
 
 # ✅ Function to wait for redirect and proceed to next image
 def wait_for_redirect():
@@ -172,35 +199,38 @@ def wait_for_redirect():
 def delete_artwork(url, urls):
     try:
         driver.get(url)  # Open the artwork page
-        time.sleep(2)  # Ensure everything loads
+
+        # ✅ Wait for the page to load dynamically
+        WebDriverWait(driver, 5).until(
+            EC.presence_of_element_located((By.TAG_NAME, "body"))
+        )
 
         retries = 0
         while retries < 3:
             try:
-                # ✅ Find and click the correct delete button using CSS selector
-                delete_button = find_correct_delete_button()
+                # ✅ Find and click the delete button as soon as it's visible
+                delete_button = WebDriverWait(driver, 3).until(lambda d: find_correct_delete_button(d))
                 if delete_button:
                     delete_button.click()
                     print(f"🗑 Clicked delete on: {url}")
 
-                    # ✅ Wait for the delete confirmation modal
-                    WebDriverWait(driver, 5).until(
+                    # ✅ IMMEDIATELY wait for the modal (NO fixed sleep)
+                    WebDriverWait(driver, 2).until(
                         EC.presence_of_element_located((By.CLASS_NAME, "ReactModal__Overlay"))
                     )
                     print("🛑 Confirmation modal detected.")
 
-                    # ✅ Click the confirm delete button
+                    # ✅ Click the confirm delete button as fast as possible
                     if confirm_deletion():
-                        # ✅ Wait for redirect to DeviantArt profile
-                        if wait_for_redirect():
-                            # ✅ Remove the deleted URL from the list
-                            urls.remove(url)
-                            if urls:
-                                # ✅ If URLs remain, update the file
-                                with open("artwork_links.txt", "w") as file:
-                                    file.write("\n".join(urls))
-                                print(f"✅ Successfully deleted and removed from file: {url}")
-                            return  # Exit function after successful deletion
+                        print("✅ Deletion successful. Removing from list...")
+                        urls.remove(url)
+
+                        # ✅ Update file only when necessary
+                        if urls:
+                            with open("artwork_links.txt", "w") as file:
+                                file.write("\n".join(urls))
+
+                        return  # ✅ Exit after successful deletion
 
                 else:
                     print("❌ Delete button not found. Retrying...")
@@ -214,6 +244,8 @@ def delete_artwork(url, urls):
 
     except Exception as e:
         print(f"❌ Error deleting {url}: {e}")
+
+
 
 # ✅ Load the artwork links
 if os.path.exists("artwork_links.txt"):
